@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>ADMIN TẠO KEY</title>
+<style>
+body{background:#000;color:#0f0;font-family:monospace;padding:20px}
+button{padding:10px;margin:5px;background:#000;border:1px solid #0f0;color:#0f0}
+</style>
+</head>
+<body>
+
+<h2>🔑 ADMIN KEY BOT 5.0</h2>
+<button onclick="createKey()">➕ Tạo Key</button>
+<ul id="list"></ul>
+
+<script>
+async function load(){
+  const res = await fetch("/keys");
+  const keys = await res.json();
+  list.innerHTML="";
+  keys.forEach(k=>{
+    list.innerHTML += `
+      <li>${k.key} (${k.type})
+      <button onclick="del(${k.id})">X</button></li>`;
+  });
+}
+async function createKey(){
+  await fetch("/keys",{method:"POST"});
+  load();
+}
+async function del(id){
+  await fetch("/keys/"+id,{method:"DELETE"});
+  load();
+}
+load();
+</script>
+
+</body>
+</html>

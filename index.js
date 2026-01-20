@@ -1,43 +1,96 @@
 const express = require("express");
 const fs = require("fs");
-const path = require("path");
+const cors = require("cors");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
+app.use(cors());
 app.use(express.json());
 
-// file lưu key
-const KEY_FILE = "./keys.json";
-if (!fs.existsSync(KEY_FILE)) fs.writeFileSync(KEY_FILE, "[]");
+const PORT = process.env.PORT || 3000;
+const DB_FILE = "keys.json";
 
-// 👉 TRANG ADMIN (CÁI BẠN ĐANG LOAD)
+// tạo file nếu chưa có
+if (!fs.existsSync(DB_FILE)) {
+  fs.writeFileSync(DB_FILE, JSON.stringify([]));
+}
+
+// đọc key
+function readKeys() {
+  return JSON.parse(fs.readFileSync(DB_FILE));
+}
+
+// ghi key
+function saveKeys(data) {
+  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+}
+
+/* ====== TRANG CHỦ (QUAN TRỌNG) ====== */
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "admin.html"));
+  res.send(`
+    <h2>✅ ADMIN KEY SERVER ĐANG CHẠY</h2>
+    <p>Dùng các API:</p>
+    <ul>
+      <li>POST /create</li>
+      <li>POST /delete</li>
+      <li>POST /check</li>
+      <li>GET /list</li>
+    </ul>
+  `);
 });
 
-// lấy danh sách key
-app.get("/keys", (req, res) => {
-  res.json(JSON.parse(fs.readFileSync(KEY_FILE)));
+/* ====== TẠO KEY ====== */
+app.post("/create", (req, res) => {
+  const { key } = req.body;
+  if (!key) return res.json({ ok: false, msg: "Thiếu key" });
+
+  let keys = readKeys();
+  if (keys.find(k => k.key === key))
+    return res.json({ ok: false, msg: "Key đã tồn tại" });
+
+  keys.push({
+    key,
+    device: null,
+    expire: Date.now() + 24 * 60 * 60 * 1000
+  });
+
+  saveKeys(keys);
+  res.json({ ok: true });
 });
 
-// tạo key
-app.post("/keys", (req, res) => {
-  const keys = JSON.parse(fs.readFileSync(KEY_FILE));
-  const key = "KEY-" + Math.random().toString(36).substring(2, 10).toUpperCase();
-  keys.push({ id: Date.now(), key, type: "FREE" });
-  fs.writeFileSync(KEY_FILE, JSON.stringify(keys, null, 2));
-  res.json({ success: true, key });
+/* ====== XOÁ KEY ====== */
+app.post("/delete", (req, res) => {
+  const { key } = req.body;
+  let keys = readKeys().filter(k => k.key !== key);
+  saveKeys(keys);
+  res.json({ ok: true });
 });
 
-// xoá key
-app.delete("/keys/:id", (req, res) => {
-  let keys = JSON.parse(fs.readFileSync(KEY_FILE));
-  keys = keys.filter(k => k.id != req.params.id);
-  fs.writeFileSync(KEY_FILE, JSON.stringify(keys, null, 2));
-  res.json({ success: true });
+/* ====== CHECK KEY (1 KEY = 1 MÁY) ====== */
+app.post("/check", (req, res) => {
+  const { key, device } = req.body;
+  let keys = readKeys();
+  let k = keys.find(x => x.key === key);
+
+  if (!k) return res.json({ ok: false, msg: "Key sai" });
+  if (Date.now() > k.expire)
+    return res.json({ ok: false, msg: "Key hết hạn" });
+
+  if (!k.device) {
+    k.device = device;
+    saveKeys(keys);
+  }
+
+  if (k.device !== device)
+    return res.json({ ok: false, msg: "Key đã dùng trên máy khác" });
+
+  res.json({ ok: true });
+});
+
+/* ====== XEM DANH SÁCH KEY ====== */
+app.get("/list", (req, res) => {
+  res.json(readKeys());
 });
 
 app.listen(PORT, () => {
-  console.log("ADMIN KEY SERVER RUNNING ON PORT", PORT);
+  console.log("Server running on port " + PORT);
 });
